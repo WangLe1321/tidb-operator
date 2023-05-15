@@ -16,6 +16,7 @@ package fedvolumebackup
 import (
 	"context"
 	"fmt"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
@@ -76,7 +77,16 @@ func (c *defaultBackupControl) UpdateStatus(volumeBackup *v1alpha1.VolumeBackup,
 }
 
 func (c *defaultBackupControl) updateBackup(volumeBackup *v1alpha1.VolumeBackup) error {
-	return c.backupManager.Sync(volumeBackup)
+	oldStatus := volumeBackup.Status.DeepCopy()
+
+	if err := c.backupManager.Sync(volumeBackup); err != nil {
+		return err
+	}
+
+	if apiequality.Semantic.DeepEqual(oldStatus, &volumeBackup.Status) {
+		return nil
+	}
+	return c.backupManager.UpdateStatus(volumeBackup, &volumeBackup.Status)
 }
 
 // addProtectionFinalizer will be called when the VolumeBackup CR is created
